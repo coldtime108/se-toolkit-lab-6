@@ -168,8 +168,6 @@ Title: `[Task] Observe System Component Interaction`
    postgres   Up 55 seconds (healthy)
    ```
 
-   <!-- TODO link to this generic troubleshooting section in wiki -->
-
    <details><summary>Troubleshooting</summary>
 
    <h4>Port conflict (<code>port is already allocated</code>)</h4>
@@ -178,14 +176,8 @@ Title: `[Task] Observe System Component Interaction`
 
    <h4>Containers exit immediately</h4>
 
-   To rebuild all containers from scratch,
-
-   [run in the `VS Code Terminal`](../../../wiki/vs-code.md#run-a-command-in-the-vs-code-terminal):
-
-   ```terminal
-   docker compose --env-file .env.docker.secret down -v
-   docker compose --env-file .env.docker.secret up --build -d
-   ```
+   1. [Stop and remove all containers and volumes](../../../wiki/docker-compose.md#stop-and-remove-all-containers-and-volumes).
+   2. [Start the services again](#123-start-the-services).
 
    </details>
 
@@ -199,8 +191,6 @@ Title: `[Task] Observe System Component Interaction`
 2. [Authorize](../../../wiki/swagger.md#authorize-in-swagger-ui) with [`API_KEY`](../../../wiki/dotenv-docker-secret.md#api_key) from [`.env.docker.secret`](../../../wiki/dotenv-docker-secret.md#what-is-envdockersecret).
 
    You should see the [`Swagger UI`](../../../wiki/swagger.md#swagger-ui) page with the [API](../../../wiki/api.md#what-is-an-api) documentation and available [endpoints](../../../wiki/api.md#endpoint).
-
-   <!-- TODO write troubleshooting in wiki -->
 
    <details><summary>Troubleshooting</summary>
 
