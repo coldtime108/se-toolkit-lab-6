@@ -61,3 +61,4 @@ The agent prints a single JSON line to stdout:
     {"tool": "read_file", "args": {"path": "wiki/git-workflow.md"}, "result": "..."}
   ]
 }
+Quick update after review.
