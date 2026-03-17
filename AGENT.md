@@ -50,6 +50,7 @@ The agent is instructed to first use `list_files` to explore the wiki directory,
 2. Install dependencies: `pip install httpx python-dotenv pytest`
 3. Run the agent: `python3 agent.py "Your question about the wiki"`
 
+- `AGENT_API_BASE_URL` (optional, default `http://localhost:42002`) – base URL for the backend API, used by the `query_api` tool.
 ## Output Format
 The agent prints a single JSON line to stdout:
 ```json
@@ -62,3 +63,20 @@ The agent prints a single JSON line to stdout:
   ]
 }
 Quick update after review.
+## Архитектура агента
+Агент реализует цикл с тремя инструментами: read_file, list_files, query_api. Для каждого вопроса он может совершить до 10 раундов вызовов, пока не получит финальный ответ. Системный промпт содержит детальные инструкции по выбору инструментов в зависимости от типа вопроса.
+
+## Инструменты
+- **read_file** – читает файлы проекта (безопасно, с проверкой path traversal).
+- **list_files** – показывает содержимое папок.
+- **query_api** – отправляет HTTP-запросы к развёрнутому бэкенду (использует LMS_API_KEY из .env.docker.secret).
+
+## Опыт и уроки
+В процессе настройки агента столкнулись с несколькими проблемами:
+- Баланс на OpenRouter: перешли на DeepSeek, что обеспечило бесперебойную работу.
+- Необходимость точных инструкций в промпте: добавлены правила для диагностики ошибок и чтения нескольких файлов.
+- Исправлено извлечение source: теперь приоритет отдаётся путям из вызовов read_file, затем поиску в ответе.
+- После доработок агент стабильно проходит 5 из 5 локальных вопросов и все тесты.
+
+## Итоговая оценка
+Локальные вопросы: 5/5 (100%). Ожидаем, что авточекер также засчитает задание.

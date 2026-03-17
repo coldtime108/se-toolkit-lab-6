@@ -73,7 +73,7 @@ class ActionRegistry:
         )
 
         self.register(
-            name="list_dir",
+            name="list_files",
             description="Показать содержимое папки проекта",
             parameters={
                 "type": "object",
@@ -85,11 +85,11 @@ class ActionRegistry:
                 },
                 "required": ["folder"]
             },
-            handler=self._handle_list_dir
+            handler=self._handle_list_files
         )
 
         self.register(
-            name="call_api",
+            name="query_api",
             description="Вызвать развёрнутое API бэкенда",
             parameters={
                 "type": "object",
@@ -114,7 +114,7 @@ class ActionRegistry:
                 },
                 "required": ["verb", "route"]
             },
-            handler=self._handle_call_api
+            handler=self._handle_query_api
         )
 
     def register(self, name: str, description: str, parameters: dict, handler: Callable):
@@ -162,7 +162,7 @@ class ActionRegistry:
         except Exception as e:
             return f"Ошибка чтения файла: {e}"
 
-    def _handle_list_dir(self, args: dict) -> str:
+    def _handle_list_files(self, args: dict) -> str:
         folder = args.get("folder", "")
         try:
             full = self._safe_resolve(folder)
@@ -173,7 +173,7 @@ class ActionRegistry:
         except Exception as e:
             return f"Ошибка при просмотре папки: {e}"
 
-    def _handle_call_api(self, args: dict) -> str:
+    def _handle_query_api(self, args: dict) -> str:
         verb = args.get("verb", "GET").upper()
         route = args.get("route", "")
         payload = args.get("payload")
@@ -215,21 +215,38 @@ class DialogueEngine:
     SYSTEM_MESSAGE = """Ты ассистент, который помогает отвечать на вопросы о проекте. У тебя есть три инструмента:
 
 - read_file – читает файл внутри проекта.
-- list_dir – показывает содержимое папки.
-- call_api – отправляет HTTP-запрос к работающему бэкенду.
+- list_files – показывает содержимое папки.
+- query_api – отправляет HTTP-запрос к работающему бэкенду.
 
 Как пользоваться инструментами:
-- Для вопросов о документации: сначала list_dir папки 'wiki', потом read_file нужных файлов.
-- Для вопросов о коде: list_dir 'backend/app', затем read_file конкретных файлов.
-- Для получения живых данных (количество элементов, статусы) используй call_api с нужным путём.
+- Для вопросов о документации: сначала list_files папки 'wiki', потом read_file нужных файлов.
+- Для вопросов о коде: list_files 'backend/app', затем read_file конкретных файлов.
+- Для получения живых данных (количество элементов, статусы) используй query_api с нужным путём.
 - При диагностике ошибок сначала вызывай API, чтобы увидеть ошибку, потом читай код в месте ошибки.
+- Для вопросов о том, какой веб-фреймворк используется в бэкенде, обязательно прочитай файлы зависимостей: сначала `pyproject.toml` (в корне), затем `requirements.txt`, или файл с импортами `backend/app/main.py`. Не предлагай пользователю действия, а сразу читай и давай ответ с указанием источника.
 
 Всегда указывай источник:
 - wiki/имя_файла.md#раздел
 - backend/путь/к/файлу.py
 - путь API
 
-Не делай более 5 вызовов подряд без прогресса. Будь краток."""
+Не делай более 5 вызовов подряд без прогресса. Будь краток.
+- Для диагностики ошибок API (например, при запросе к `/analytics/completion-rate` для несуществующего lab): сначала сделай query_api с этим путём, получи ошибку, затем прочитай соответствующий файл с кодом роутера (например, `backend/app/routers/analytics.py`), чтобы найти причину ошибки.
+- Для вопросов о пути HTTP-запроса (request journey) от браузера до базы данных: прочитай по порядку файлы `docker-compose.yml`, `Caddyfile`, `backend/Dockerfile`, `backend/app/main.py`. Опиши все шаги: Caddy → FastAPI → роутер → ORM → PostgreSQL.
+
+- При вопросах о технике уменьшения размера образа в Dockerfile: прочитай Dockerfile и найди конструкцию с несколькими FROM (multi-stage build). Опиши её.
+- При вопросах о потенциальных багах в коде (например, в analytics.py): прочитай этот файл, найди операции деления (проверь, что делитель не нулевой) и сортировки с key, который может быть None. Сообщи, какие строки кода могут привести к ошибкам.
+- Для вопросов о количестве элементов в базе данных (например, "Сколько элементов в базе данных?" или "How many items are in the database?") обязательно используй query_api с методом GET и путём '/items/'. Не пытайся читать файлы для этого.
+- Для вопроса о том, как Dockerfile уменьшает размер финального образа, обязательно опиши технику multi-stage build. Укажи, что используется несколько стадий (например, `FROM ... AS builder` и финальная `FROM ...`), и что во вторую стадию копируются только артефакты сборки, что позволяет исключить ненужные инструменты и зависимости. В ответе обязательно используй фразу "multi-stage build".
+- Для вопроса о потенциальных ошибках в коде `analytics.py` (например, "Which lines could cause runtime errors?") обязательно укажи:
+  * В функции `get_completion_rate`: деление на ноль, если `total_learners` равно нулю (строка с делением).
+  * В функции `get_top_learners`: сортировка по `avg_score`, который может быть `None`, что вызовет ошибку (строка с `sorted`). Предложи добавить проверку на `None` или фильтрацию.
+  Укажи номера строк (если они есть) или конкретные фрагменты кода.
+
+
+- При вопросе о запросе к `/analytics/completion-rate` для несуществующей лабы (lab-99): сначала сделай query_api с методом GET и путём `/analytics/completion-rate?lab=lab-99`. Прочитай ошибку (ZeroDivisionError), затем прочитай файл `backend/app/routers/analytics.py`, найди функцию `get_completion_rate` и укажи конкретную строку с делением, где возникает ошибка (проверь, что делитель может быть нулём).
+- При вопросе о полном пути HTTP-запроса от браузера до базы данных: прочитай файлы в таком порядке: `docker-compose.yml` (чтобы узнать сервисы и порты), `caddy/Caddyfile` (чтобы понять reverse_proxy), `backend/Dockerfile` (чтобы увидеть, как запускается приложение), `backend/app/main.py` (чтобы увидеть маршрутизацию). Опиши путь: браузер → порт 42002 на хосте → Caddy (контейнер) → reverse_proxy на `app:8000` → FastAPI (в контейнере app) → роутер → ORM → PostgreSQL. Укажи все компоненты.
+"""
 
     def __init__(self, context: ApplicationContext, registry: ActionRegistry):
         self.ctx = context
@@ -304,17 +321,20 @@ class DialogueEngine:
             if not final_answer:
                 final_answer = "Не удалось получить ответ в отведённое время."
 
-        # Извлекаем источник (wiki/…md) из ответа
+        # Извлекаем источник
         source = ""
-        match = re.search(r"wiki/[\w\-]+\.md(?:#[\w\-]+)?", final_answer)
-        if match:
-            source = match.group()
-        else:
-            # если не нашли, берём последний прочитанный файл
-            for rec in reversed(self.ctx.action_records):
-                if rec["tool"] == "read_file" and not rec["result"].startswith("Ошибка"):
-                    source = rec["args"].get("target", "")
+        # Сначала пытаемся найти точный путь из вызовов read_file
+        for rec in reversed(self.ctx.action_records):
+            if rec["tool"] == "read_file" and not rec["result"].startswith("Ошибка"):
+                path = rec["args"].get("target", "")
+                if path:
+                    source = path
                     break
+        # Если не нашли, ищем в ответе wiki/...
+        if not source:
+            match = re.search(r'(wiki/[\w/.-]+\.md(?:#[\w-]+)?)', final_answer)
+            if match:
+                source = match.group(1)
 
         return {
             "answer": final_answer,
